@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+</head>
+<body>
+
+<h2>WebSocket Chat Test</h2>
+
+<input type="text" id="message" placeholder="Type message">
+<button onclick="sendMessage()">Send</button>
+
+<ul id="chat"></ul>
+
+<script>
+    let stompClient = null;
+    let username = null;
+
+    function connect() {
+        username = prompt("Enter your username");
+        
+        // ✅ Pass username as query parameter
+        let socket = new SockJS("http://localhost:8080/ws?username=" + username);
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect(
+            {},  // ✅ Empty headers - not needed anymore
+            function () {
+                console.log("Connected as " + username);
+
+                stompClient.subscribe("/user/queue/messages", function (msg) {
+                    let data = JSON.parse(msg.body);
+
+                    let li = document.createElement("li");
+                    li.textContent = data.sender + ": " + data.content;
+
+                    document.getElementById("chat").appendChild(li);
+                });
+            }
+        );
+    }
+
+    function sendMessage() {
+        let message = document.getElementById("message").value;
+        let receiver = prompt("Enter receiver username");
+
+        stompClient.send("/app/chat", {}, JSON.stringify({
+            sender: username,
+            receiver: receiver,
+            content: message
+        }));
+    }
+
+    connect();
+</script>
+
+</body>
+</html>
