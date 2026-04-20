@@ -13,17 +13,25 @@ public class UserService {
 
     private final UserRepository userRepository;
 
-    public User register(User user) {
-        return userRepository.save(user);
+   public User register(User user) {
+
+    // ✅ Validate input
+    if (user.getUsername() == null || user.getUsername().isEmpty()) {
+        throw new RuntimeException("Username is required");
     }
 
-    public Optional<User> login(String username, String password) {
-        Optional<User> user = userRepository.findByUsername(username);
-
-        if (user.isPresent() && user.get().getPassword().equals(password)) {
-            return user;
-        }
-
-        return Optional.empty();
+    if (user.getPassword() == null || user.getPassword().isEmpty()) {
+        throw new RuntimeException("Password is required");
     }
+
+    // ✅ Check duplicate user
+    Optional<User> existingUser = userRepository.findByUsername(user.getUsername());
+
+    if (existingUser.isPresent()) {
+        throw new RuntimeException("User already exists");
+    }
+
+    // ✅ Save user
+    return userRepository.save(user);
+}
 }
