@@ -1,19 +1,25 @@
 package com.chatapp.chat.controller;
 
 import com.chatapp.chat.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequiredArgsConstructor
 public class HealthController {
     
     private final MongoTemplate mongoTemplate;
     private final UserRepository userRepository;
-    private final RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired(required = false)  // Make Redis optional
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    public HealthController(MongoTemplate mongoTemplate, UserRepository userRepository) {
+        this.mongoTemplate = mongoTemplate;
+        this.userRepository = userRepository;
+    }
     
     @GetMapping("/health")
     public String health() {
@@ -35,14 +41,18 @@ public class HealthController {
         }
         
         // Redis Check
-        try {
-            redisTemplate.opsForValue().set("health-check", "OK");
-            String redisCheck = (String) redisTemplate.opsForValue().get("health-check");
-            status.append("✅ Redis Connected! Test value: ")
-                  .append(redisCheck);
-        } catch (Exception e) {
-            status.append("❌ Redis Error: ")
-                  .append(e.getMessage());
+        if (redisTemplate != null) {
+            try {
+                redisTemplate.opsForValue().set("health-check", "OK");
+                String redisCheck = (String) redisTemplate.opsForValue().get("health-check");
+                status.append("✅ Redis Connected! Test value: ")
+                      .append(redisCheck);
+            } catch (Exception e) {
+                status.append("❌ Redis Error: ")
+                      .append(e.getMessage());
+            }
+        } else {
+            status.append("⚠️ Redis not configured");
         }
         
         return status.toString();
