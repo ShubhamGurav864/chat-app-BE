@@ -7,8 +7,8 @@ https://chat-app-be-psfy.onrender.com/swagger-ui/index.html
 
 📌 Features
 ✅ User Registration & Login
+✅ Web Sockets
 ✅ Send and Retrieve Messages
-✅ RESTful API Design
 ✅ MongoDB Integration (NoSQL DB)
 ✅ Redis Integration (Caching / Realtime support ready)
 ✅ Dockerized Deployment
