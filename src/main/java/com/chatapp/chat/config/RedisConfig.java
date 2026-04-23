@@ -17,30 +17,49 @@ import java.time.Duration;
 @Configuration
 public class RedisConfig {
 
-    @Value("${spring.data.redis.url}")
+    @Value("${REDIS_URL}")
     private String redisUrl;
 
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
+        try {
+            URI uri = URI.create(redisUrl);
 
-        URI uri = URI.create(redisUrl);
+            RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration();
+            redisConfig.setHostName(uri.getHost());
+            redisConfig.setPort(uri.getPort() > 0 ? uri.getPort() : 6379);
 
-        RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration();
-        redisConfig.setHostName(uri.getHost());
-        redisConfig.setPort(uri.getPort());
+            // Extract password from URL
+            if (uri.getUserInfo() != null) {
+                String[] userInfo = uri.getUserInfo().split(":", 2);
+                if (userInfo.length > 1) {
+                    // Format: username:password
+                    redisConfig.setPassword(RedisPassword.of(userInfo[1]));
+                } else if (userInfo.length == 1 && !userInfo[0].isEmpty()) {
+                    // Format: just password
+                    redisConfig.setPassword(RedisPassword.of(userInfo[0]));
+                }
+            }
 
-        // Extract password
-        if (uri.getUserInfo() != null) {
-            String password = uri.getUserInfo().split(":", 2)[1];
-            redisConfig.setPassword(RedisPassword.of(password));
+            // Build client configuration with SSL support
+            LettuceClientConfiguration.LettuceClientConfigurationBuilder clientConfigBuilder = 
+                    LettuceClientConfiguration.builder()
+                            .commandTimeout(Duration.ofSeconds(60));
+
+            // Enable SSL only if using rediss:// scheme
+            if ("rediss".equalsIgnoreCase(uri.getScheme())) {
+                clientConfigBuilder.useSsl();
+            }
+
+            LettuceClientConfiguration clientConfig = clientConfigBuilder.build();
+
+            return new LettuceConnectionFactory(redisConfig, clientConfig);
+            
+        } catch (Exception e) {
+            // Mask password in error message for security
+            String safeUrl = redisUrl != null ? redisUrl.replaceAll(":[^:@]+@", ":***@") : "null";
+            throw new RuntimeException("Failed to configure Redis connection. URL format: " + safeUrl, e);
         }
-
-        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
-                .commandTimeout(Duration.ofSeconds(60))
-                .useSsl() // IMPORTANT for rediss://
-                .build();
-
-        return new LettuceConnectionFactory(redisConfig, clientConfig);
     }
 
     @Bean
