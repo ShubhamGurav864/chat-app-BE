@@ -14,10 +14,10 @@ https://chat-app-be-psfy.onrender.com/swagger-ui/index.html
 ✅ Dockerized Deployment
 ✅ Deployed on cloud (Render)
 
-📂 Project Structure
-src/
- ├── controller     → REST Controllers (Auth, Messages)
- ├── service        → Business Logic
- ├── repository     → MongoDB Repositories
- ├── model          → Data Models
- └── config         → Configurations (if any)
+🛠️ Tech Stack
+Backend: Java, Spring Boot
+Database: MongoDB
+Cache / Realtime Support: Redis
+Build Tool: Maven
+Deployment: Docker + Render
+API Testing: Swagger UI
