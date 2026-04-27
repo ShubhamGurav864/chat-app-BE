@@ -1,9 +1,13 @@
 package com.chatapp.chat.controller;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.URI;
 
 @RestController
@@ -11,6 +15,9 @@ public class RedisDebugController {
     
     @Value("${REDIS_URL:not-set}")
     private String redisUrl;
+    
+    @Autowired(required = false)
+    private RedisTemplate<String, Object> redisTemplate;
     
     @GetMapping("/debug/redis")
     public String debugRedis() {
@@ -90,6 +97,74 @@ public class RedisDebugController {
             for (StackTraceElement element : e.getStackTrace()) {
                 debug.append("  ").append(element.toString()).append("\n");
             }
+        }
+        
+        return debug.toString();
+    }
+    
+    @GetMapping("/debug/redis-connection")
+    public String debugRedisConnection() {
+        StringBuilder debug = new StringBuilder();
+        
+        debug.append("=== Redis Connection Test ===\n\n");
+        
+        // Check if RedisTemplate is available
+        if (redisTemplate == null) {
+            debug.append("❌ RedisTemplate is NULL!\n");
+            debug.append("This means Spring Boot failed to create the Redis connection.\n");
+            debug.append("Check application startup logs for errors.\n");
+            return debug.toString();
+        }
+        
+        debug.append("✅ RedisTemplate bean exists\n\n");
+        
+        try {
+            // Test 1: Basic ping
+            debug.append("Test 1: PING command\n");
+            String ping = redisTemplate.getConnectionFactory()
+                .getConnection()
+                .ping();
+            debug.append("✅ PING successful: ").append(ping).append("\n\n");
+            
+            // Test 2: Set/Get operation
+            debug.append("Test 2: SET/GET operation\n");
+            String testKey = "test-key-" + System.currentTimeMillis();
+            String testValue = "test-value-" + System.currentTimeMillis();
+            
+            redisTemplate.opsForValue().set(testKey, testValue);
+            debug.append("✅ SET successful: ").append(testKey).append(" = ").append(testValue).append("\n");
+            
+            Object retrievedValue = redisTemplate.opsForValue().get(testKey);
+            debug.append("✅ GET successful: ").append(retrievedValue).append("\n");
+            
+            if (testValue.equals(retrievedValue)) {
+                debug.append("✅ Values match!\n\n");
+            } else {
+                debug.append("⚠️  WARNING: Retrieved value doesn't match!\n\n");
+            }
+            
+            // Test 3: Delete operation
+            debug.append("Test 3: DELETE operation\n");
+            Boolean deleted = redisTemplate.delete(testKey);
+            debug.append("✅ DELETE successful: ").append(deleted).append("\n\n");
+            
+            debug.append("=== ALL TESTS PASSED ===\n");
+            debug.append("Redis is working correctly!\n");
+            
+        } catch (Exception e) {
+            debug.append("\n❌ Redis Connection FAILED\n\n");
+            debug.append("Error Type: ").append(e.getClass().getName()).append("\n");
+            debug.append("Error Message: ").append(e.getMessage()).append("\n");
+            
+            if (e.getCause() != null) {
+                debug.append("Cause: ").append(e.getCause().getClass().getName()).append("\n");
+                debug.append("Cause Message: ").append(e.getCause().getMessage()).append("\n");
+            }
+            
+            debug.append("\nFull Stack Trace:\n");
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            debug.append(sw.toString());
         }
         
         return debug.toString();
