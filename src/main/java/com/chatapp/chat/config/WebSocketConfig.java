@@ -58,6 +58,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                     }
                 })
                 .setHandshakeHandler(new DefaultHandshakeHandler() {
+                    
                     @Override
                     protected Principal determineUser(ServerHttpRequest request,
                                                     WebSocketHandler wsHandler,
