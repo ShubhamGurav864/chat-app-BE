@@ -1,61 +1,153 @@
-package com.chatapp.chat.config;
+package com.chatapp.chat.controller;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.connection.RedisPassword;
-import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
-import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.URI;
-import java.time.Duration;
 
-@Configuration
-public class RedisConfig {
+@RestController
+public class RedisDebugController {
     
-    @Value("${REDIS_URL}")
+    @Value("${REDIS_URL:not-set}")
     private String redisUrl;
     
-    @Bean
-    public LettuceConnectionFactory redisConnectionFactory() {
-        URI uri = URI.create(redisUrl);
+    @Autowired(required = false)
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @GetMapping("/debug/redis")
+    public String debugRedis() {
+        StringBuilder debug = new StringBuilder();
         
-        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
-        config.setHostName(uri.getHost());
-        config.setPort(uri.getPort());
+        debug.append("=== Redis Configuration Debug ===\n\n");
         
-        // Extract password
-        if (uri.getUserInfo() != null) {
-            String[] parts = uri.getUserInfo().split(":", 2);
-            if (parts.length > 1) {
-                config.setPassword(RedisPassword.of(parts[1]));
-            }
+        if ("not-set".equals(redisUrl)) {
+            debug.append("❌ REDIS_URL environment variable is NOT SET!\n");
+            debug.append("Please add REDIS_URL to your Render environment variables.\n");
+            return debug.toString();
         }
         
-        // SSL configuration
-        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
-            .commandTimeout(Duration.ofSeconds(10))
-            .useSsl()
-            .build();
+        debug.append("✅ REDIS_URL is set\n\n");
         
-        LettuceConnectionFactory factory = new LettuceConnectionFactory(config, clientConfig);
-        factory.afterPropertiesSet(); // ← CRITICAL! Initialize the factory
-        return factory;
+        try {
+            URI uri = URI.create(redisUrl);
+            
+            debug.append("Parsed URL Details:\n");
+            debug.append("- Scheme: ").append(uri.getScheme()).append("\n");
+            debug.append("- Host: ").append(uri.getHost()).append("\n");
+            debug.append("- Port: ").append(uri.getPort()).append("\n");
+            debug.append("- Has UserInfo: ").append(uri.getUserInfo() != null).append("\n");
+            
+            if (uri.getUserInfo() != null) {
+                String[] parts = uri.getUserInfo().split(":", 2);
+                debug.append("- Username: ").append(parts[0]).append("\n");
+                debug.append("- Password: ").append(parts.length > 1 ? "***SET***" : "NOT SET").append("\n");
+            }
+            
+            debug.append("\n");
+            
+            if (!"redis".equalsIgnoreCase(uri.getScheme()) && !"rediss".equalsIgnoreCase(uri.getScheme())) {
+                debug.append("⚠️  WARNING: Scheme should be 'redis://' or 'rediss://'\n");
+            } else if ("redis".equalsIgnoreCase(uri.getScheme())) {
+                debug.append("⚠️  WARNING: Using 'redis://' without SSL\n");
+            } else {
+                debug.append("✅ Using 'rediss://' with SSL\n");
+            }
+            
+            if (uri.getPort() < 0) {
+                debug.append("⚠️  WARNING: No port specified\n");
+            } else {
+                debug.append("✅ Port: ").append(uri.getPort()).append("\n");
+            }
+            
+            if (uri.getHost() == null || uri.getHost().isEmpty()) {
+                debug.append("❌ ERROR: No host specified!\n");
+            } else {
+                debug.append("✅ Host: ").append(uri.getHost()).append("\n");
+            }
+            
+            if (uri.getUserInfo() == null) {
+                debug.append("⚠️  WARNING: No authentication info found!\n");
+            } else {
+                String[] parts = uri.getUserInfo().split(":", 2);
+                if (parts.length < 2) {
+                    debug.append("⚠️  WARNING: Password might not be set correctly\n");
+                } else {
+                    debug.append("✅ Password appears to be set\n");
+                }
+            }
+            
+            debug.append("\nExpected format:\n");
+            debug.append("rediss://default:YOUR_PASSWORD@your-host.redislabs.com:6379\n");
+            debug.append("\nYour format (sanitized):\n");
+            debug.append(redisUrl.replaceAll(":[^:@]+@", ":***@")).append("\n");
+            
+        } catch (Exception e) {
+            debug.append("❌ ERROR parsing REDIS_URL: ").append(e.getMessage()).append("\n");
+        }
+        
+        return debug.toString();
     }
     
-    @Bean
-    public RedisTemplate<String, Object> redisTemplate(LettuceConnectionFactory connectionFactory) {
-        RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(connectionFactory);
-        template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
-        template.setHashKeySerializer(new StringRedisSerializer());
-        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
-        template.afterPropertiesSet();
-        return template;
+    @GetMapping("/debug/redis-connection")
+    public String debugRedisConnection() {
+        StringBuilder debug = new StringBuilder();
+        
+        debug.append("=== Redis Connection Test ===\n\n");
+        
+        if (redisTemplate == null) {
+            debug.append("❌ RedisTemplate is NULL!\n");
+            debug.append("This means Spring Boot failed to create the Redis connection.\n");
+            return debug.toString();
+        }
+        
+        debug.append("✅ RedisTemplate bean exists\n\n");
+        
+        try {
+            debug.append("Test 1: PING command\n");
+            String ping = redisTemplate.getConnectionFactory()
+                .getConnection()
+                .ping();
+            debug.append("✅ PING successful: ").append(ping).append("\n\n");
+            
+            debug.append("Test 2: SET/GET operation\n");
+            String testKey = "test-key-" + System.currentTimeMillis();
+            String testValue = "test-value-" + System.currentTimeMillis();
+            
+            redisTemplate.opsForValue().set(testKey, testValue);
+            debug.append("✅ SET successful\n");
+            
+            Object retrievedValue = redisTemplate.opsForValue().get(testKey);
+            debug.append("✅ GET successful\n");
+            
+            if (testValue.equals(retrievedValue)) {
+                debug.append("✅ Values match!\n\n");
+            }
+            
+            debug.append("Test 3: DELETE operation\n");
+            Boolean deleted = redisTemplate.delete(testKey);
+            debug.append("✅ DELETE successful\n\n");
+            
+            debug.append("=== ALL TESTS PASSED ===\n");
+            
+        } catch (Exception e) {
+            debug.append("\n❌ Redis Connection FAILED\n\n");
+            debug.append("Error: ").append(e.getMessage()).append("\n");
+            
+            if (e.getCause() != null) {
+                debug.append("Cause: ").append(e.getCause().getMessage()).append("\n");
+            }
+            
+            debug.append("\nStack Trace:\n");
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            debug.append(sw.toString());
+        }
+        
+        return debug.toString();
     }
 }
