@@ -22,7 +22,6 @@ public class RedisConfig {
     
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
-        
         URI uri = URI.create(redisUrl);
         
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
@@ -37,11 +36,16 @@ public class RedisConfig {
             }
         }
         
-        // SSL configuration
-        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
-            .commandTimeout(Duration.ofSeconds(10))
-            .useSsl()
-            .build();
+        // Only enable SSL if URL scheme is 'rediss'
+        LettuceClientConfiguration.LettuceClientConfigurationBuilder builder = 
+            LettuceClientConfiguration.builder()
+                .commandTimeout(Duration.ofSeconds(10));
+        
+        if ("rediss".equalsIgnoreCase(uri.getScheme())) {
+            builder.useSsl();
+        }
+        
+        LettuceClientConfiguration clientConfig = builder.build();
         
         LettuceConnectionFactory factory = new LettuceConnectionFactory(config, clientConfig);
         factory.afterPropertiesSet();
